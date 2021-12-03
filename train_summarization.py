@@ -13,15 +13,18 @@ from transformers import EncoderDecoderModel
 model_directory = 'data/models/bart_attempt_3/'
 checkpoint = 'facebook/bart-base'
 
+# check for checkpoints
 checkpoints = [name for name in os.listdir(model_directory) if name.startswith('checkpoint')]
 
 if checkpoints:
     model_checkpoint = model_directory + sorted(checkpoints)[-1]
 
+# load tokenizer and set some special tokens
 tokenizer = BartTokenizer.from_pretrained(checkpoint)
 tokenizer.bos_token = tokenizer.cls_token
 tokenizer.eos_token = tokenizer.sep_token
 
+# summarization hyper-params
 encoder_max_length=512
 decoder_max_length=128
 batch_size = 4
@@ -48,7 +51,7 @@ def process_data_to_model_inputs(batch):
 if __name__ == '__main__':
 
     rouge = datasets.load_metric("rouge")
-
+    # function to appy rouge metric
     def compute_metrics(pred):
         labels_ids = pred.label_ids
         pred_ids = pred.predictions
@@ -67,6 +70,7 @@ if __name__ == '__main__':
         }
     train_dataset, val_dataset = load_dataset("cnn_dailymail", '2.0.0', split='train[:50%]'), load_dataset("cnn_dailymail", '2.0.0', split='validation[:25%]')
 
+    # tokenize training and validation data
     print('tokenizing train...')
     tokenized_train = train_dataset.map(process_data_to_model_inputs, 
         batched=True, 
@@ -87,9 +91,10 @@ if __name__ == '__main__':
     type="torch", columns=["input_ids", "attention_mask", "decoder_input_ids", "decoder_attention_mask", "labels"],
     )
 
-    #model = EncoderDecoderModel.from_encoder_decoder_pretrained('bert-base-uncased', 'bert-base-uncased')
+    # load model from checkpoint of huggingface publicly available models
     model = BartForConditionalGeneration.from_pretrained(checkpoint)
     
+    # training arguments
     training_args = training_args_seq2seq.Seq2SeqTrainingArguments(model_directory, 
         per_device_train_batch_size=batch_size, 
         per_device_eval_batch_size=batch_size, 
@@ -103,6 +108,7 @@ if __name__ == '__main__':
         predict_with_generate=True
         )
 
+    # create trainer
     trainer = trainer_seq2seq.Seq2SeqTrainer(
         model,
         training_args,
@@ -113,7 +119,6 @@ if __name__ == '__main__':
         compute_metrics=compute_metrics
     )
 
-    #model_checkpoint = None#'C:\VSCodeDrive\5290_text_summarization\data\models\test_summarization_bart2\checkpoint-5500'
-    model_checkpoint = 'data/models/bert2bert/checkpoint-6000'
-    train_output = trainer.train(resume_from_checkpoint = model_checkpoint)
+    # train model and save results
+    train_output = trainer.train(resume_from_checkpoint = checkpoint)
     trainer.save()
